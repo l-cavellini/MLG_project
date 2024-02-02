@@ -100,4 +100,35 @@ class HGT_Layer(MessagePassing):
             aggr[idx] = a_lin(messages[idx]) + inputs[idx]
         return aggr
 
-         
+class HGT(nn.Module):
+    def __init__(self, num_nodes, num_relations, num_types, in_dim, hidden_dim, out_dim, n_heads, n_layers, dropout = 0.2):
+        super(HGT, self).__init__()
+
+        self.num_nodes = num_nodes
+        self.num_relations = num_relations
+        self.num_types = num_types
+        self.in_dim = in_dim
+        self.hidden_dim = hidden_dim
+        self.out_dim = out_dim
+        self.n_heads = n_heads
+        self.n_layers = n_layers
+
+        self.layers = nn.ModuleList()
+        self.layers.append(HGT_Layer(n_heads, in_dim, hidden_dim, num_relations, num_types, dropout))
+
+        for _ in range(n_layers - 1):
+            self.layers.append(HGT_Layer(n_heads, hidden_dim, hidden_dim, num_relations, num_types, dropout))
+
+        self.linear = nn.Linear(hidden_dim, out_dim)
+    
+    def forward(self, data):
+        x, node_type, edge_index, edge_type = data.x, data.node_type, data.edge_index, data.edge_type
+
+        for layer in self.layers:
+            x = layer(x, node_type, edge_index, edge_type)
+            x = layer.update(x, node_type)
+
+        x = self.linear(x)
+        return F.log_softmax(x, dim=1)
+    
+
